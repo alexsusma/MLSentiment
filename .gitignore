@@ -45,3 +45,12 @@ $RECYCLE.BIN/
 Network Trash Folder
 Temporary Items
 .apdisk
+MLSentiment/ipch/mlsentiment-a844bcd1/mlsentiment-d2136d16.ipch
+MLSentiment/MLSentiment.opensdf
+*.sdf
+*.tlog
+MLSentiment/Release/MLSentiment.Build.CppClean.log
+*.lastbuildstate
+MLSentiment/Release/MLSentiment.log
+*.pch
+MLSentiment/Release/MLSentiment.pdb
