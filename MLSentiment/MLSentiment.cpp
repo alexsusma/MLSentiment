@@ -1,5 +1,3 @@
-#include <vector>
-#include <string>
 #include <algorithm>
 #include "MLSentiment.h"
 #include "document.h"
@@ -7,11 +5,11 @@
 #include "stringbuffer.h"
 #include <iostream>
 #include <fstream>
-#include <string.h>
 #include "pointer.h"
 #include <thread>
 #include <conio.h>
-#include "include/twitcurl.h"
+#include "TwitterConnection.h"
+
 
 
  #define MAX_THREADS 10
@@ -19,54 +17,33 @@
 using namespace rapidjson;
 using namespace std;
 
-struct CompanyResults{
-	vector<int> sentimentsPerTweet;
-	int absoluteSentiment;
-	int negativeCount;
-	int neutralCount;
-	int positiveCount;
-	int overallSentiment;
-	string name;
 
-	CompanyResults()
-		:absoluteSentiment(0)
-		,negativeCount(0)
-		,neutralCount(0)
-		,positiveCount(0)
-		,overallSentiment(0)
-	{
-	}
 
-};
-
-std::vector<string> positiveWords;
-std::vector<string> negativeWords;
-std::vector<string> stopWords;
-twitCurl twitterObj;
-std::map<string,CompanyResults> companyResultsMap;
 
 void GetInput(vector<string>& aQueries, int& aCount)
 {
-	char tmpBuf[1024];
-	printf( "\nEnter companies to research separated by comma(i.e. Apple,Google,Netflix...):\n\n" );
-    memset( tmpBuf, 0, 1024 );
+	cout<<"\nEnter company names separated by comma(i.e. Apple,Google,Netflix...):\n\n";
+	char tmpBuf[512] ={0};
 	cin.getline(tmpBuf,sizeof(tmpBuf));
 	
 	//parse the input into individual company names and store them
-	char * pch;
+	char * token;
 	char * context;
-     pch = strtok_s (tmpBuf,",",&context);
-	while (pch != NULL)
+     token = strtok_s (tmpBuf,",",&context);
+	while (token != NULL)
 	{
-		aQueries.push_back(string(pch));
-		pch = strtok_s (NULL, ",",&context);
+		aQueries.push_back(string(token));
+		token = strtok_s (NULL, ",",&context);
 	}
 
-	printf( "\nHow many tweets to analyze per company ?\n\n" );
+	cout<<"\nHow many tweets to analyze per company ?\n\n";
 	cin >> aCount;
 
 }
 
+/*LoadDictionaries will read in 3 text files and store the contents in 3 string vectors.
+* The vectors will contain english positive, negative and stop words.
+*/
 void LoadDictionaries()
 {
 	string temp;
@@ -87,6 +64,10 @@ void LoadDictionaries()
 	fileInNeg.close();
 }
 
+
+/*SentimentToString will take an integer sentiment value and return the string associated with it.
+* Possible returns: "neutral","positive","negative"
+*/
 string SentimentToString(int sentiment)
 {
 	string result = "neutral";
@@ -98,7 +79,10 @@ string SentimentToString(int sentiment)
 	return result;
 }
 
-vector<string> splitTweet(const string &tweet, char delimiter) {
+/*SplitTweet will take a string containing a tweet and break it down into words based on the delimiter.
+* Return value is a vector of strings which contains the tweet words.
+*/
+vector<string> SplitTweet(const string &tweet, char delimiter) {
     vector<string> words;
     stringstream sstream(tweet);
     string word;
@@ -113,7 +97,7 @@ vector<string> splitTweet(const string &tweet, char delimiter) {
 int AnalyzeTweetSentiment(const string& tweet)
 {
 	int posCount = 0, negCount = 0;
-	vector<string> words = splitTweet(tweet,' ');
+	vector<string> words = SplitTweet(tweet,' ');
 				
 	for (vector<string>::iterator it = words.begin(); it != words.end(); ++it){
 		//skip stop words
@@ -214,9 +198,7 @@ void AnalyzeCompanySentiment(string& aCompanyName, vector<string>& tweets)
 				
 				 
 		myResults.sentimentsPerTweet.push_back(sentiment);
-		myResults.absoluteSentiment+=sentiment;
-			
-		//printf("Sentiment %s:   %s\n\n\n\n", sentimentStr.c_str(), tweet );
+
 	}	
 
 
@@ -232,65 +214,10 @@ void AnalyzeCompanySentiment(string& aCompanyName, vector<string>& tweets)
 			++myResults.negativeCount;
 	}
 	myResults.overallSentiment = max(myResults.positiveCount,max(myResults.negativeCount,myResults.neutralCount));
-	//printf("Company %s has neg %d ,neut %d ,pos %d:   \n\n\n",aCompanyName.c_str(), 
-	//		myResults.negativeCount, myResults.neutralCount, myResults.positiveCount );
-	
-	
 				
 }
 
 
-bool ConnectToTwitter(string& aUsername, string& aPassword, twitCurl& twitterObj)
-{
-	
-    bool result = false;
-	string replyMsg;
-
-
-	printf("Connecting to Twitter with username: %s \n", aUsername.c_str()); 
-    /* Set twitter username and password */
-    twitterObj.setTwitterUsername( aUsername );
-    twitterObj.setTwitterPassword( aPassword );
-
-   
-    /* OAuth flow begins */
-    /* Step 0: Set OAuth related params. These are got by registering your app at twitter.com */
-    twitterObj.getOAuth().setConsumerKey( std::string( "eFOtYIhgDxdL8C7q5cqBeCfit" ) );
-    twitterObj.getOAuth().setConsumerSecret( std::string( "hWqg9GUT849yUPh0J6qtct8xK38pcbMC6fbWJggTmCujlGotLl" ) );
-
-    /* Check if we alredy have OAuth access token from a previous run */
-    string myOAuthAccessTokenKey("");
-    string myOAuthAccessTokenSecret("");
-    
-    myOAuthAccessTokenKey = "23764909-HI1iGuKgDVYOptVhqmkKqQIS67kplGLYUnS3gigKz";
-	myOAuthAccessTokenSecret = "M7WU0pDhxhx7fuw5hNTmEplQtsLilzPdgZLrqwCNXqSOv";
-
-    
-    if( myOAuthAccessTokenKey.size() && myOAuthAccessTokenSecret.size() )
-    {
-        twitterObj.getOAuth().setOAuthTokenKey( myOAuthAccessTokenKey );
-        twitterObj.getOAuth().setOAuthTokenSecret( myOAuthAccessTokenSecret );
-    }
-    
-    /* OAuth flow ends */
-
-    /* Account credentials verification */
-    if( twitterObj.accountVerifyCredGet() )
-    {
-        twitterObj.getLastWebResponse( replyMsg );
-		printf ("Connection sucessful");
-		result = true;
-       // printf( "\ntwitterClient:: twitCurl::accountVerifyCredGet web response:\n%s\n", replyMsg.c_str() );
-    }
-    else
-    {
-        twitterObj.getLastCurlError( replyMsg );
-        printf( "\ntwitterClient:: twitCurl::accountVerifyCredGet error:\n%s\n", replyMsg.c_str() );
-		result = false;
-    }
-
-	return result;
-}
 
 
 void RunSearchAndAnalysis(string& aQuery, string aCount)
@@ -303,7 +230,6 @@ void RunSearchAndAnalysis(string& aQuery, string aCount)
     if( twit->search( aQuery,  aCount ) )
     {
         twit->getLastWebResponse( replyMsg );
-       // printf( "\ntwitterClient:: twitCurl::search web response:\n%s\n\n", replyMsg.c_str() );
 	
 		Document doc;
 		doc.Parse(replyMsg.c_str());
@@ -325,7 +251,7 @@ void RunSearchAndAnalysis(string& aQuery, string aCount)
     else
     {
         twit->getLastCurlError( replyMsg );
-        printf( "\ntwitterClient:: twitCurl::search error:\n%s\n", replyMsg.c_str() );
+        cout<<"\ntwitCurl::search error:\n"<<replyMsg.c_str();
     }
 }
 
@@ -334,14 +260,19 @@ void OutputResults()
 	for (map<string,CompanyResults>::iterator it = companyResultsMap.begin(); it != companyResultsMap.end(); ++it)
 	{
 		CompanyResults companyRes = it->second;
-		printf("Company %s has the following sentiment counts: Pos: %d, Neut: %d, Neg: %d\n\n",
-			it->first.c_str(),companyRes.positiveCount,companyRes.neutralCount,companyRes.negativeCount);
+		cout<<it->first.c_str() << " has the following sentiment counts:\tPos:"<<companyRes.positiveCount<<
+																		"\tNeut:"<<companyRes.neutralCount<< 
+																		"\tNeg:"<<companyRes.negativeCount<<"\n\n";
+
 	}
 }
 int main( int argc, char* argv[] )
 {
+
+	//reserve memory to avoid constant resizing
 	positiveWords.reserve(5000);
 	negativeWords.reserve(5000);
+	stopWords.reserve(5000);
 
 	//Load dictionary from files
 	LoadDictionaries();
@@ -350,9 +281,14 @@ int main( int argc, char* argv[] )
     string userName ="alexsusma";
     string passWord ="Fy6#@A%9";
     
+	cout <<"========";
+	cout<<"Twitter Sentiment Analyzer by Alex Susma\n";
+	cout<<"June 2016\n";
+	cout <<"========\n\n";
+
 	//Connect to Twitter
     if (!ConnectToTwitter(userName, passWord, twitterObj)){
-		printf("Connection failed");
+		cout<<"Connection failed. Program exiting...";
 		return 0;
 	}
 
@@ -373,7 +309,7 @@ int main( int argc, char* argv[] )
 
 	OutputResults();
 
-	printf("Press any key to end the program");
+	cout<<"Press any key to end the program";
 	_getch();
     return 0;
 }

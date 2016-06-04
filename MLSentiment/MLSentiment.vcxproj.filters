@@ -27,12 +27,18 @@
     <ClInclude Include="MLSentiment.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="TwitterConnection.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="MLSentiment.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="TwitterConnection.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

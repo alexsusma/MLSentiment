@@ -54,3 +54,6 @@ MLSentiment/Release/MLSentiment.Build.CppClean.log
 MLSentiment/Release/MLSentiment.log
 *.pch
 MLSentiment/Release/MLSentiment.pdb
+MLSentiment/Release/MLSentiment.obj
+*.obj
+MLSentiment/Release/MLSentiment.obj
