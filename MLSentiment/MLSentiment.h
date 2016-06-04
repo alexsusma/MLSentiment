@@ -12,11 +12,14 @@ struct CompanyResults{
 	int neutralCount;
 	int positiveCount;
 	string name;
+	bool hasPrevResults;
 
 	CompanyResults()
 		:negativeCount(0)
 		,neutralCount(0)
 		,positiveCount(0)
+		,hasPrevResults(false)
+		,name("")
 	{
 	}
 
