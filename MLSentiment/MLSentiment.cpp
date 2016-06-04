@@ -5,7 +5,6 @@
 #include "stringbuffer.h"
 #include <iostream>
 #include <fstream>
-#include "pointer.h"
 #include <thread>
 #include <conio.h>
 #include "TwitterConnection.h"
@@ -14,6 +13,7 @@
 #define EXECUTION_PERIOD	10000
 #define MAX_THREADS			10
 #define MULTITHREADING
+#define OUTPUT_TWEETS
 //#define MANUAL_INPUT 
 
 using namespace rapidjson;
@@ -62,7 +62,7 @@ bool GetInput(vector<string>& aQueries, int& aCount)
 	}
 	fileIn.close();
 
-	cout<<"\n"<<aCount<<" twets each\n";
+	cout<<"\n"<<aCount<<" tweets each\n\n";
 
 	if (aQueries.empty()){
 		cout<<"Input file not loaded !!!";
@@ -131,14 +131,14 @@ int AnalyzeTweetSentiment(const string& tweet)
 	int posCount = 0, negCount = 0;
 	vector<string> words = ParseTweet(tweet,' ');
 				
-	for (vector<string>::iterator it = words.begin(); it != words.end(); ++it){
+	for (auto it : words){
 		//skip stop words
-		if (binary_search(stopWords.begin(), stopWords.end(), *it))
+		if (binary_search(stopWords.begin(), stopWords.end(), it))
 			continue;
 		
-		if (binary_search(positiveWords.begin(), positiveWords.end(), *it))
+		if (binary_search(positiveWords.begin(), positiveWords.end(), it))
 			++posCount;
-		else if (binary_search(negativeWords.begin(), negativeWords.end(), *it))
+		else if (binary_search(negativeWords.begin(), negativeWords.end(), it))
 			--negCount;
 	}
 	//return difference between positive and negative words
@@ -167,7 +167,7 @@ void ProcessTweet(string& tweet)
 	}
 	
 	//make lowercase
-	for (std::string::size_type i=0; i<tweet.length(); ++i)
+	for (string::size_type i=0; i<tweet.length(); ++i)
 		tweet.at(i) = tolower(tweet[i]);
 	
 	//remove @username
@@ -201,14 +201,14 @@ void ProcessTweet(string& tweet)
 /*	AnalyzeCompanySentiment will take a vector of strings containing all the tweets
 *	associated with a company and compute the final sentiment counts. 
 */
-void AnalyzeCompanySentiment(string& aCompanyName, vector<string>& tweets)
+void AnalyzeCompanySentiment(string& aCompanyName)
 {
 	int oldPositive = 0, oldNeutral = 0, oldNegative = 0;
 	CompanyResults& company = companyResultsMap[aCompanyName.c_str()];
 
-	for (vector<string>::iterator it = tweets.begin(); it != tweets.end(); ++it)
-	{
-		string tweet = *it;
+	for (auto it : company.tweets){
+
+		string tweet = it;
 		ProcessTweet(tweet);
 		if (company.hasPrevResults){
 			//extract previous results for comparison
@@ -225,9 +225,9 @@ void AnalyzeCompanySentiment(string& aCompanyName, vector<string>& tweets)
 
 	}	
 
-		company.hasPrevResults = true;
+	company.hasPrevResults = true;
 	vector<int>& sentiments = company.sentimentsPerTweet;
-	for (unsigned int i = 0; i < sentiments.size(); ++i)
+	for (auto i : sentiments)
 	{
 		int sentiment = sentiments[i];
 		if (sentiment > 0)
@@ -282,7 +282,8 @@ void RunSearchAndAnalysis(string aQuery, string aCount)
 				tweets.push_back(doc["statuses"][i]["text"].GetString());	
 			}
 
-			AnalyzeCompanySentiment(aQuery,tweets);
+			companyResultsMap[aQuery.c_str()].tweets = tweets;
+			AnalyzeCompanySentiment(aQuery);
 		}
     }
     else
@@ -305,20 +306,40 @@ void OutputResults()
 
 	out<<"Company,Positive,Neutral,Negative\n";
 	//output to screen
-	for (map<string,CompanyResults>::iterator it = companyResultsMap.begin(); it != companyResultsMap.end(); ++it)
-	{
-		CompanyResults companyRes = it->second;
-		cout<<it->first.c_str() << " => :\tPos:"<<companyRes.positiveCount<<
+	for (auto it : companyResultsMap){
+		CompanyResults companyRes = it.second;
+		cout<<it.first.c_str() << " => :\tPos:"<<companyRes.positiveCount<<
 										"\tNeut:"<<companyRes.neutralCount<< 
 										"\tNeg:"<<companyRes.negativeCount<<"\n\n";
 
-		out<<it->first.c_str()<< ","<<companyRes.positiveCount<<","<<companyRes.neutralCount<<","<<companyRes.negativeCount<<"\n";
+		out<<it.first.c_str()<< ","<<companyRes.positiveCount<<","<<companyRes.neutralCount<<","<<companyRes.negativeCount<<"\n";
 
 	}
-
 	myfile << out.rdbuf();
 	myfile.close();
 
+#ifdef OUTPUT_TWEETS
+	//print out all the raw tweets for debugging. Since most raw tweets contain ',', 
+	//output the tweets in a txt file, not csv.
+	//Format:  tweet,sentiment score
+	stringstream out2;
+	ofstream myfile2;
+	fileName = ("tweets.txt");
+	myfile2.open (fileName.c_str());
+	for (auto it : companyResultsMap){
+		CompanyResults companyRes = it.second;
+		int i = 0;
+		out2<<companyRes.name<<"\n\n";
+		for (auto tweet: companyRes.tweets){
+			out2<<tweet<<","<<companyRes.sentimentsPerTweet[i++]<<"\n";
+		}
+		out2<<"\n\n\n\n";
+
+	}
+
+	myfile2 << out2.rdbuf();
+	myfile2.close();
+#endif
 }
 
 int main( int argc, char* argv[] )
@@ -334,19 +355,19 @@ int main( int argc, char* argv[] )
 	int count = 0;
 	vector<string> inputQueries;
 	
+
+	cout <<"=======================================\n";
+	cout<<"Twitter Sentiment Analyzer by Alex Susma\n";
+	cout<<"June 2016\n";
+	cout <<"=======================================\n\n";
+
 	if (!LoadDictionaries() || !GetInput(inputQueries, count)){
 		cout<<"Press any key to end the program";
 		_getch();
 		return 0;
 	}
 
-    
-	cout <<"=======================================\n";
-	cout<<"Twitter Sentiment Analyzer by Alex Susma\n";
-	cout<<"June 2016\n";
-	cout <<"=======================================\n\n";
 
-	
 	//set username & password
     string userName ="alexsusma";
     string passWord ="Fy6#@A%9";
@@ -357,10 +378,10 @@ int main( int argc, char* argv[] )
 		return 0;
 	}
 
-	int iterations = 0;
+
 	while(1){
 
-		//clock_t start = clock();
+		clock_t start = clock();
 
 
 #ifdef MULTITHREADING
@@ -376,24 +397,23 @@ int main( int argc, char* argv[] )
 			myThreads[i].join();
 		}
 
-	//	double diff = (clock() - start) / (double)CLOCKS_PER_SEC;
-	//	cout<<"Total time multithreading: "<<diff<<"\n";
+		double diff = (clock() - start) / (double)CLOCKS_PER_SEC;
+		cout<<"\nTotal time multithreading: "<<diff<<"\n\n";
 
 #else
 		// FOR PERFORMANCE TESTING PURPOSES
 	
 		//sequential execution 1 thread
-		 start = clock();
+		start = clock();
 		for (unsigned int i = 0; i < inputQueries.size();++i){
 			RunSearchAndAnalysis(inputQueries[i],to_string(count));
 		}
 
 		diff = (clock() - start) / (double)CLOCKS_PER_SEC;
-		cout<<"Total time 1 thread: "<<diff<<"\n";
+		cout<<"\nTotal time 1 thread: "<<diff<<"\n\n";
 
 #endif
 		OutputResults();
-		++iterations;
 		Sleep(EXECUTION_PERIOD);	
 }
 

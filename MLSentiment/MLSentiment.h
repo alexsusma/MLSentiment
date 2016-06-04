@@ -8,6 +8,7 @@ using namespace std;
 
 struct CompanyResults{
 	vector<int> sentimentsPerTweet;
+	vector<string> tweets;
 	int negativeCount;
 	int neutralCount;
 	int positiveCount;
@@ -25,8 +26,8 @@ struct CompanyResults{
 
 };
 
-std::vector<string> positiveWords;
-std::vector<string> negativeWords;
-std::vector<string> stopWords;
+vector<string> positiveWords;
+vector<string> negativeWords;
+vector<string> stopWords;
 twitCurl twitterObj;
-std::map<string,CompanyResults> companyResultsMap;
+map<string,CompanyResults> companyResultsMap;
