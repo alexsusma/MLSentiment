@@ -40,7 +40,7 @@ bool ConnectToTwitter(string& aUsername, string& aPassword, twitCurl& twitterObj
     if( twitterObj.accountVerifyCredGet() )
     {
         twitterObj.getLastWebResponse( replyMsg );
-		cout<<"Connection sucessful\n";
+		cout<<"Connection successful\n";
 		result = true;
        // printf( "\ntwitterClient:: twitCurl::accountVerifyCredGet web response:\n%s\n", replyMsg.c_str() );
     }

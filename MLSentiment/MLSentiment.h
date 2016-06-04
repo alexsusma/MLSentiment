@@ -5,19 +5,18 @@
 
 using namespace std;
 
+
 struct CompanyResults{
 	vector<int> sentimentsPerTweet;
 	int negativeCount;
 	int neutralCount;
 	int positiveCount;
-	int overallSentiment;
 	string name;
 
 	CompanyResults()
 		:negativeCount(0)
 		,neutralCount(0)
 		,positiveCount(0)
-		,overallSentiment(0)
 	{
 	}
 

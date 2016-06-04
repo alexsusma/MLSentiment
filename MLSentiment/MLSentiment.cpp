@@ -19,7 +19,10 @@ using namespace std;
 
 
 
-
+/*	GetInput will ask the user for the names of the companies to be researched.
+*	the function will then parse the input and store the company names in a vector
+*	of strings. A count of tweets to be analyzed per company is also requested.
+*/
 void GetInput(vector<string>& aQueries, int& aCount)
 {
 	cout<<"\nEnter company names separated by comma(i.e. Apple,Google,Netflix...):\n\n";
@@ -29,20 +32,22 @@ void GetInput(vector<string>& aQueries, int& aCount)
 	//parse the input into individual company names and store them
 	char * token;
 	char * context;
-     token = strtok_s (tmpBuf,",",&context);
+    token = strtok_s (tmpBuf,",",&context);
 	while (token != NULL)
 	{
 		aQueries.push_back(string(token));
 		token = strtok_s (NULL, ",",&context);
 	}
 
+
 	cout<<"\nHow many tweets to analyze per company ?\n\n";
 	cin >> aCount;
 
 }
 
-/*LoadDictionaries will read in 3 text files and store the contents in 3 string vectors.
-* The vectors will contain english positive, negative and stop words.
+/*	LoadDictionaries will read in 3 text files and store the contents 
+*	in 3 string vectors. The vectors will contain english positive,
+*	negative and stop words.
 */
 void LoadDictionaries()
 {
@@ -62,25 +67,16 @@ void LoadDictionaries()
 	while (fileInStop >> temp)
 		stopWords.push_back(temp);
 	fileInNeg.close();
+
+	if (positiveWords.size() == 0 || negativeWords.size() == 0 || stopWords.size() == 0)
+		cout<<"Dictionaries not loaded !!!";
+
 }
 
 
-/*SentimentToString will take an integer sentiment value and return the string associated with it.
-* Possible returns: "neutral","positive","negative"
-*/
-string SentimentToString(int sentiment)
-{
-	string result = "neutral";
-	if (sentiment < 0)
-		result = "negative";
-	else if (sentiment > 0)
-		result = "positive";
-
-	return result;
-}
-
-/*SplitTweet will take a string containing a tweet and break it down into words based on the delimiter.
-* Return value is a vector of strings which contains the tweet words.
+/*	SplitTweet will take a string containing a tweet and break it down into 
+*	words based on the delimiter.
+*	Return value is a vector of strings which contains the tweet words.
 */
 vector<string> SplitTweet(const string &tweet, char delimiter) {
     vector<string> words;
@@ -94,6 +90,14 @@ vector<string> SplitTweet(const string &tweet, char delimiter) {
 }
 
 
+/*	AnalyzeTweetSentiment will take a string containing a tweet and analyze 
+*	the sentiment based on words. The function will go through the words of 
+*	the tweet and check them against the stop words which will be ignored.
+*	If the word is not a stop word, it iwll be checked against positive and 
+*	negative words. If there is a match the count for that specific sentiment 
+*	is increased. 
+*	Return value is the absolute difference between the positive and the negative counts.
+*/
 int AnalyzeTweetSentiment(const string& tweet)
 {
 	int posCount = 0, negCount = 0;
@@ -114,13 +118,19 @@ int AnalyzeTweetSentiment(const string& tweet)
 }
 
 
-
+/*	ProcessTweet will take a string containing a tweet and preprocess it in
+*	preparation for analysis. The function will perform the following operations:
+*	1. remove the # symbol and other special characters
+*	2. make lowercase
+*	3. remove @username
+*	4. remove http links
+*	Note: The function used to remove "RT" string as well. It was moved in the list of stop words
+*/
 void ProcessTweet(string& tweet)
 {
-	//remove hashtags
-
+	//remove hashtags and other special characters
 	size_t position = 0;
-	size_t start;
+	/*size_t start;
 	while(position != string::npos) {
 		start = tweet.find_first_of("+\"%!()[]{}:;<>/\\=^&*~#?$1234567890", position);
 		if (start != string::npos)
@@ -130,27 +140,21 @@ void ProcessTweet(string& tweet)
 		if(position != string::npos)
 			position++;
 	}
-	
-	//remove RT
-	position = 0;
-	start = 0;
-	while(position != string::npos) {
-		start = tweet.find("RT", position);
-		if (start != string::npos)
-			tweet.replace(start,2,"");
-		else
-			break;
-		if(position != string::npos)
-			position++;
+	*/
+	string specialCharacters = "+\"%!()[]{}:;<>/\\=^&*~#?$1234567890";
+	for (position = tweet.find_first_of(specialCharacters); 
+			position != string::npos; position = tweet.find(specialCharacters, position))
+	{
+			tweet.erase(position, 1);
 	}
-
+	
 	//make lowercase
 	for (std::string::size_type i=0; i<tweet.length(); ++i)
 		tweet.at(i) = tolower(tweet[i]);
 	
 	//remove @username
 	position = 0;
-	start = 0;
+	/*start = 0;
 	while(position != string::npos) {
 		start = tweet.find("@", position);
 		if (start != string::npos){
@@ -165,10 +169,19 @@ void ProcessTweet(string& tweet)
 		if(position != string::npos)
 			position = start;
 	}
+	*/
+	for (position = tweet.find_first_of("@"); 
+			position != string::npos; position = tweet.find(specialCharacters, position))
+	{
+		if (size_t endUsername = tweet.find_first_of(": ,",position) != string::npos)
+			tweet.erase(position, endUsername-position+1);
+		else
+			tweet.erase(position, tweet.length()-position+1);
+	}
 
 	//remove url
 	position = 0;
-	start = 0;
+	/*start = 0;
 	while(position != string::npos) {
 		start = tweet.find("http", position);
 		if (start != string::npos){
@@ -183,8 +196,21 @@ void ProcessTweet(string& tweet)
 		if(position != string::npos)
 			position++;
 	}
+	*/
+	for (position = tweet.find("http"); 
+			position != string::npos; position = tweet.find("http", position))
+	{
+		if (size_t endLink = tweet.find_first_of(": ,",position) != string::npos)
+			tweet.erase(position, endLink-position+1);
+		else
+			tweet.erase(position, tweet.length()-position+1);
+	}
 }
 
+
+/*	AnalyzeCompanySentiment will take a vector of strings containing all the tweets
+*	associated with a company and compute the final sentiment counts. 
+*/
 void AnalyzeCompanySentiment(string& aCompanyName, vector<string>& tweets)
 {
 	CompanyResults& myResults = companyResultsMap[aCompanyName.c_str()];
@@ -193,11 +219,7 @@ void AnalyzeCompanySentiment(string& aCompanyName, vector<string>& tweets)
 	{
 		string tweet = *it;
 		ProcessTweet(tweet);
-		int sentiment = AnalyzeTweetSentiment(tweet);				
-		string sentimentStr = SentimentToString(sentiment);
-				
-				 
-		myResults.sentimentsPerTweet.push_back(sentiment);
+		myResults.sentimentsPerTweet.push_back(AnalyzeTweetSentiment(tweet));
 
 	}	
 
@@ -213,19 +235,33 @@ void AnalyzeCompanySentiment(string& aCompanyName, vector<string>& tweets)
 		else if (sentiment < 0)
 			++myResults.negativeCount;
 	}
-	myResults.overallSentiment = max(myResults.positiveCount,max(myResults.negativeCount,myResults.neutralCount));
 				
 }
 
 
-
-
-void RunSearchAndAnalysis(string& aQuery, string aCount)
+/*	RunSearchAndAnalysis will start a query for a company name with a tweet count.
+*	Once it has the results, it will parse them into tweets and pass them to the
+*	analyzer function.
+*/
+void RunSearchAndAnalysis(string aQuery, string aCount)
 {
-
+	
 	string replyMsg;
 	vector<string> tweets;
 	twitCurl* twit = twitterObj.clone();
+
+	//replace any spaces with %20 for compatibility with http query
+	size_t position = 0;
+	for (position = aQuery.find(' '); position != string::npos; position = aQuery.find(' ', position)){
+		//just delete leading and trailing spaces
+		if (position == 0 || position == aQuery.length()-1)
+			aQuery.erase(position,1);
+		else
+			//replace middle spaces by %20
+			aQuery.replace(position, 1, "%20");
+	}
+	
+
 
     if( twit->search( aQuery,  aCount ) )
     {
@@ -255,17 +291,23 @@ void RunSearchAndAnalysis(string& aQuery, string aCount)
     }
 }
 
+
+/*	OutputResults will output final sentiment counts to the console 
+*	and a CSV file
+*/
 void OutputResults()
 {
 	for (map<string,CompanyResults>::iterator it = companyResultsMap.begin(); it != companyResultsMap.end(); ++it)
 	{
 		CompanyResults companyRes = it->second;
-		cout<<it->first.c_str() << " has the following sentiment counts:\tPos:"<<companyRes.positiveCount<<
-																		"\tNeut:"<<companyRes.neutralCount<< 
-																		"\tNeg:"<<companyRes.negativeCount<<"\n\n";
+		cout<<it->first.c_str() << " => :\tPos:"<<companyRes.positiveCount<<
+										"\tNeut:"<<companyRes.neutralCount<< 
+										"\tNeg:"<<companyRes.negativeCount<<"\n\n";
 
 	}
 }
+
+
 int main( int argc, char* argv[] )
 {
 
@@ -281,10 +323,10 @@ int main( int argc, char* argv[] )
     string userName ="alexsusma";
     string passWord ="Fy6#@A%9";
     
-	cout <<"========";
+	cout <<"=======================================\n";
 	cout<<"Twitter Sentiment Analyzer by Alex Susma\n";
 	cout<<"June 2016\n";
-	cout <<"========\n\n";
+	cout <<"=======================================\n\n";
 
 	//Connect to Twitter
     if (!ConnectToTwitter(userName, passWord, twitterObj)){
@@ -297,6 +339,10 @@ int main( int argc, char* argv[] )
 	vector<string> inputQueries;
 	GetInput(inputQueries, count);
 	
+
+
+	clock_t start = clock();
+
 	//start search and analyse results
 	thread myThreads[MAX_THREADS];
 	for (unsigned int i = 0; i < inputQueries.size();++i){
@@ -306,6 +352,20 @@ int main( int argc, char* argv[] )
 	for (unsigned int i = 0; i < inputQueries.size();++i){
 		myThreads[i].join();
 	}
+	double diff = (clock() - start) / (double)CLOCKS_PER_SEC;
+	cout<<"Total time multithreading: "<<diff<<"\n";
+	
+	/* FOR PERFORMANCE TESTING PURPOSES
+	
+	//sequential execution 1 thread
+	 start = clock();
+	for (unsigned int i = 0; i < inputQueries.size();++i){
+		RunSearchAndAnalysis(inputQueries[i],to_string(count));
+	}
+
+	diff = (clock() - start) / (double)CLOCKS_PER_SEC;
+	cout<<"Total time 1 thread: "<<diff<<"\n";
+	*/
 
 	OutputResults();
 
