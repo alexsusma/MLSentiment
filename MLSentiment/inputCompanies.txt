@@ -1,0 +1,11 @@
+100
+Apple
+Google
+Netflix
+Exxon
+Bombardier
+Uber
+Volkswagen
+Toyota
+Samsung
+Starbucks

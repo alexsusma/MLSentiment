@@ -11,8 +11,10 @@
 #include "TwitterConnection.h"
 
 
-
- #define MAX_THREADS 10
+#define EXECUTION_PERIOD	10000
+#define MAX_THREADS			10
+#define MULTITHREADING
+//#define MANUAL_INPUT 
 
 using namespace rapidjson;
 using namespace std;
@@ -22,9 +24,11 @@ using namespace std;
 /*	GetInput will ask the user for the names of the companies to be researched.
 *	the function will then parse the input and store the company names in a vector
 *	of strings. A count of tweets to be analyzed per company is also requested.
+*	The function can also read the input from an input file inputCompanies.txt
 */
 void GetInput(vector<string>& aQueries, int& aCount)
 {
+#ifdef MANUAL_INPUT
 	cout<<"\nEnter company names separated by comma(i.e. Apple,Google,Netflix...):\n\n";
 	char tmpBuf[512] ={0};
 	cin.getline(tmpBuf,sizeof(tmpBuf));
@@ -41,8 +45,21 @@ void GetInput(vector<string>& aQueries, int& aCount)
 
 
 	cout<<"\nHow many tweets to analyze per company ?\n\n";
-	cin >> aCount;
-
+	cin >> aCount;	
+#else
+	//read input from file
+	string temp;
+	ifstream fileIn("inputCompanies.txt");
+	cout<<"\nReading input...\n";
+	fileIn>>aCount;
+	while (fileIn >> temp){
+		aQueries.push_back(temp);
+		cout<<temp<<",";
+	}
+	cout<<"  "<<aCount<<" twets each\n";
+	fileIn.close();
+	
+#endif
 }
 
 /*	LoadDictionaries will read in 3 text files and store the contents 
@@ -262,7 +279,7 @@ void RunSearchAndAnalysis(string aQuery, string aCount)
 	}
 	
 
-
+	//run the search and extract the tweets
     if( twit->search( aQuery,  aCount ) )
     {
         twit->getLastWebResponse( replyMsg );
@@ -297,6 +314,13 @@ void RunSearchAndAnalysis(string aQuery, string aCount)
 */
 void OutputResults()
 {
+	stringstream out;
+	ofstream myfile;
+	string fileName = ("OutputResults.csv");
+	myfile.open (fileName.c_str());
+
+	out<<"Company,Positive,Neutral,Negative\n";
+	//output to screen
 	for (map<string,CompanyResults>::iterator it = companyResultsMap.begin(); it != companyResultsMap.end(); ++it)
 	{
 		CompanyResults companyRes = it->second;
@@ -304,7 +328,17 @@ void OutputResults()
 										"\tNeut:"<<companyRes.neutralCount<< 
 										"\tNeg:"<<companyRes.negativeCount<<"\n\n";
 
+		out<<it->first.c_str()<< ","<<companyRes.positiveCount<<","<<companyRes.neutralCount<<","<<companyRes.negativeCount<<"\n";
+
 	}
+
+	myfile << out.rdbuf();
+	myfile.close();
+
+}
+
+void CheckSentimentChange(){
+
 }
 
 
@@ -316,17 +350,18 @@ int main( int argc, char* argv[] )
 	negativeWords.reserve(5000);
 	stopWords.reserve(5000);
 
-	//Load dictionary from files
+	//Load dictionaries from files
 	LoadDictionaries();
-
-	//set username & password
-    string userName ="alexsusma";
-    string passWord ="Fy6#@A%9";
     
 	cout <<"=======================================\n";
 	cout<<"Twitter Sentiment Analyzer by Alex Susma\n";
 	cout<<"June 2016\n";
 	cout <<"=======================================\n\n";
+
+	
+	//set username & password
+    string userName ="alexsusma";
+    string passWord ="Fy6#@A%9";
 
 	//Connect to Twitter
     if (!ConnectToTwitter(userName, passWord, twitterObj)){
@@ -334,41 +369,54 @@ int main( int argc, char* argv[] )
 		return 0;
 	}
 
-	//Ask user for input
+	//Ask user for input or read the input file based on 
+	//the definition of MANUAL_INPUT
 	int count = 0;
 	vector<string> inputQueries;
 	GetInput(inputQueries, count);
 	
 
+	int iterations = 0;
+	while(1){
 
-	clock_t start = clock();
+		//clock_t start = clock();
 
-	//start search and analyse results
-	thread myThreads[MAX_THREADS];
-	for (unsigned int i = 0; i < inputQueries.size();++i){
-		myThreads[i] = thread(RunSearchAndAnalysis, inputQueries[i],to_string(count));
-	}
 
-	for (unsigned int i = 0; i < inputQueries.size();++i){
-		myThreads[i].join();
-	}
-	double diff = (clock() - start) / (double)CLOCKS_PER_SEC;
-	cout<<"Total time multithreading: "<<diff<<"\n";
+#ifdef MULTITHREADING
+		//start search and analyse results in separate threads
+		thread myThreads[MAX_THREADS];
+		for (unsigned int i = 0; i < inputQueries.size();++i){
+			myThreads[i] = thread(RunSearchAndAnalysis, inputQueries[i],to_string(count));
+		}
+
+
+		//wait for all threads to finish
+		for (unsigned int i = 0; i < inputQueries.size();++i){
+			myThreads[i].join();
+		}
+
+	//	double diff = (clock() - start) / (double)CLOCKS_PER_SEC;
+	//	cout<<"Total time multithreading: "<<diff<<"\n";
+
+#else
+		// FOR PERFORMANCE TESTING PURPOSES
 	
-	/* FOR PERFORMANCE TESTING PURPOSES
-	
-	//sequential execution 1 thread
-	 start = clock();
-	for (unsigned int i = 0; i < inputQueries.size();++i){
-		RunSearchAndAnalysis(inputQueries[i],to_string(count));
-	}
+		//sequential execution 1 thread
+		 start = clock();
+		for (unsigned int i = 0; i < inputQueries.size();++i){
+			RunSearchAndAnalysis(inputQueries[i],to_string(count));
+		}
 
-	diff = (clock() - start) / (double)CLOCKS_PER_SEC;
-	cout<<"Total time 1 thread: "<<diff<<"\n";
-	*/
+		diff = (clock() - start) / (double)CLOCKS_PER_SEC;
+		cout<<"Total time 1 thread: "<<diff<<"\n";
 
-	OutputResults();
-
+#endif
+		if (iterations)
+			CheckSentimentChange();
+		OutputResults();
+		++iterations;
+		Sleep(EXECUTION_PERIOD);	
+}
 	cout<<"Press any key to end the program";
 	_getch();
     return 0;
