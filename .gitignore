@@ -57,3 +57,5 @@ MLSentiment/Release/MLSentiment.pdb
 MLSentiment/Release/MLSentiment.obj
 *.obj
 MLSentiment/Release/MLSentiment.obj
+MLSentiment/OutputResults.csv
+*.txt
