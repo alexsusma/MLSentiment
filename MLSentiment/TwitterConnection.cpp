@@ -1,3 +1,13 @@
+/*	The code in this file is taken from TwitCurl open source project and 
+*	adjusted for the purposes of this project.
+*	The project can be downloaded at: https://github.com/swatkat/twitcurl
+*	Extract from wiki:
+*	"twitcurl is an open-source pure C++ library for twitter REST APIs. 
+*	Currently, it has support for most of the twitter v1.1 APIs and it will 
+*	be updated to support all the APIs. twitcurl uses cURL library for 
+*	handling HTTP requests and responses"
+*/
+
 #include "TwitterConnection.h"
 
 using namespace std;

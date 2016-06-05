@@ -9,11 +9,16 @@
 #include <conio.h>
 #include "TwitterConnection.h"
 
-
+//sleep time between subsequent excutions
 #define EXECUTION_PERIOD	10000
-#define MAX_THREADS			10
-#define MULTITHREADING
+
+//define this flag if you wish to run multihtreaded
+//#define MULTITHREADING
+
+//define this flag if you wish to output a raw list of tweets analyzed
 #define OUTPUT_TWEETS
+
+//define this flag if you wish to input company names manually
 //#define MANUAL_INPUT 
 
 using namespace rapidjson;
@@ -56,6 +61,11 @@ bool GetInput(vector<string>& aQueries, int& aCount)
 	ifstream fileIn("inputCompanies.txt");
 	cout<<"\nReading input...\n";
 	fileIn>>aCount;
+	if(!aCount){
+		cout<<"\nPlease check the first line of the input file and make sure it is an integer!\n";
+		return false;
+	}
+	
 	while (fileIn >> temp){
 		aQueries.push_back(temp);
 		cout<<temp<<",";
@@ -95,8 +105,12 @@ bool LoadDictionaries()
 		stopWords.push_back(temp);
 	fileInNeg.close();
 
-	if (positiveWords.empty() || negativeWords.empty() || stopWords.empty())
+	if (positiveWords.empty() || negativeWords.empty() || stopWords.empty()){
+		cout<<"Dictionaries could not be loaded. Please make sure "<< 
+			"stop-words.txt, negative-words.txt and positive-words.txt "<<
+			"are present in the execution folder.\n";
 		return false;
+	}
 
 	return true;
 }
@@ -159,7 +173,7 @@ void ProcessTweet(string& tweet)
 	//remove hashtags and other special characters
 	size_t position = 0;
 
-	string specialCharacters = "+\"%!()[]{}:;<>/\\=^&*~#?$1234567890";
+	string specialCharacters = "+\"\'%!()[]{}:.;<>/\\=^&*~#?$1234567890";
 	for (position = tweet.find_first_of(specialCharacters); 
 			position != string::npos; position = tweet.find(specialCharacters, position))
 	{
@@ -198,46 +212,55 @@ void ProcessTweet(string& tweet)
 
 
 
-/*	AnalyzeCompanySentiment will take a vector of strings containing all the tweets
-*	associated with a company and compute the final sentiment counts. 
+/*	AnalyzeCompanySentiment will a company name and then access its tweets
+*	to analyze and compute the final sentiment counts for that company. 
 */
 void AnalyzeCompanySentiment(string& aCompanyName)
 {
-	int oldPositive = 0, oldNeutral = 0, oldNegative = 0;
+	SentimentStatus oldStatus = ssNeutral;
 	CompanyResults& company = companyResultsMap[aCompanyName.c_str()];
 
-	for (auto it : company.tweets){
+	if (company.hasPrevResults){
+		//extract previous results for comparison
+		oldStatus		= company.status;
+		company.sentimentsPerTweet.clear();
+		company.positive.count = 0;
+		company.neutral.count = 0;
+		company.negative.count = 0;
+		company.status = ssNeutral;
+	}
 
+	//go through all the tweets
+	for (auto it : company.tweets){
 		string tweet = it;
 		ProcessTweet(tweet);
-		if (company.hasPrevResults){
-			//extract previous results for comparison
-			oldPositive		= company.positiveCount;
-			oldNeutral		= company.neutralCount;
-			oldNegative		= company.negativeCount;
-			company.sentimentsPerTweet.clear();
-			company.positiveCount = 0;
-			company.neutralCount = 0;
-			company.negativeCount = 0;
-		}else			
-			company.sentimentsPerTweet.push_back(AnalyzeTweetSentiment(tweet));
-
-
+		company.sentimentsPerTweet.push_back(AnalyzeTweetSentiment(tweet));
 	}	
 
-	company.hasPrevResults = true;
+	
 	vector<int>& sentiments = company.sentimentsPerTweet;
-	for (auto i : sentiments)
+
+	//sum up all the individual sentiments to come up with the final counts
+	for (unsigned int i = 0; i < sentiments.size(); ++i)
 	{
 		int sentiment = sentiments[i];
 		if (sentiment > 0)
-			++company.positiveCount;
+			++company.positive.count;
 		else if (sentiment == 0)
-			++company.neutralCount;
+			++company.neutral.count;
 		else if (sentiment < 0)
-			++company.negativeCount;
+			++company.negative.count;
 	}
-				
+
+	
+	company.status = company.positive.count > company.negative.count + tweetsCount/10 ? ssPositive : (company.positive.count + tweetsCount/10 < company.negative.count ? ssNegative : ssNeutral);
+	
+
+	//check results against last set of results
+	if (company.hasPrevResults)
+		company.statusChanged = company.status != oldStatus;
+		
+	company.hasPrevResults = true;					
 }
 
 
@@ -248,10 +271,11 @@ void AnalyzeCompanySentiment(string& aCompanyName)
 void RunSearchAndAnalysis(string aQuery, string aCount)
 {
 	string replyMsg;
-	vector<string> tweets;
 	twitCurl* twit = twitterObj.clone();
+	CompanyResults& company = companyResultsMap[aQuery.c_str()];
 
 	//replace any spaces with %20 for compatibility with http query
+	// NOTE: THIS STILL DOES NOT WORK IN THE QUERY
 	size_t position = 0;
 	for (position = aQuery.find(' '); position != string::npos; position = aQuery.find(' ', position)){
 		//just delete leading and trailing spaces
@@ -266,24 +290,30 @@ void RunSearchAndAnalysis(string aQuery, string aCount)
 	//run the search and extract the tweets
     if( twit->search( aQuery,  aCount ) )
     {
-        twit->getLastWebResponse( replyMsg );
-	
+		//RapidJSON doc parser
 		Document doc;
+		
+		//get the latest reply and parse it
+        twit->getLastWebResponse( replyMsg );
 		doc.Parse(replyMsg.c_str());
 
+		//if tweets have been found
 		if (doc.HasMember("statuses")){
 
 			int tweetsNum = doc["statuses"].Size();
 
-			companyResultsMap[aQuery.c_str()].name = aQuery.c_str();
+			company.name = aQuery.c_str();
 
-			//store tweets
+			//clear previous tweets if we have any
+			if (company.hasPrevResults)
+				company.tweets.clear();
+
+			//extract and store tweets
 			for (int i = 0 ; i < tweetsNum; ++i){
-				tweets.push_back(doc["statuses"][i]["text"].GetString());	
+				company.tweets.push_back(doc["statuses"][i]["text"].GetString());	
 			}
 
-			companyResultsMap[aQuery.c_str()].tweets = tweets;
-			AnalyzeCompanySentiment(aQuery);
+			AnalyzeCompanySentiment(company.name);
 		}
     }
     else
@@ -304,15 +334,36 @@ void OutputResults()
 	string fileName = ("OutputResults.csv");
 	myfile.open (fileName.c_str());
 
+	cout<<"Company\t\t\tPos\tNeut\tNeg\tSentiment\tChange\n";
+	cout<<"___________________________________________\n\n";
 	out<<"Company,Positive,Neutral,Negative\n";
 	//output to screen
 	for (auto it : companyResultsMap){
-		CompanyResults companyRes = it.second;
-		cout<<it.first.c_str() << " => :\tPos:"<<companyRes.positiveCount<<
-										"\tNeut:"<<companyRes.neutralCount<< 
-										"\tNeg:"<<companyRes.negativeCount<<"\n\n";
+		CompanyResults company = it.second;
 
-		out<<it.first.c_str()<< ","<<companyRes.positiveCount<<","<<companyRes.neutralCount<<","<<companyRes.negativeCount<<"\n";
+		string tabs = it.first.length() > 8 ? "\t\t" : "\t\t\t";
+
+		cout<<it.first.c_str() << tabs<<company.positive.count<<
+									"\t"<<company.neutral.count<< 
+									"\t"<<company.negative.count;
+		switch(company.status){
+			case ssPositive: cout<<"\tPositive"; tabs = "\t";		break;
+			case ssNegative: cout<<"\tNegative"; tabs = "\t";		break;
+			case ssNeutral:  cout<<"\tNeutral";  tabs = "\t\t";	break;
+		}
+
+
+		if (company.statusChanged)
+			cout<<tabs<<"Yes";
+
+		cout<<"\n";
+
+
+
+
+
+
+		out<<it.first.c_str()<< ","<<company.positive.count<<","<<company.neutral.count<<","<<company.negative.count<<"\n";
 
 	}
 	myfile << out.rdbuf();
@@ -352,16 +403,15 @@ int main( int argc, char* argv[] )
 
 	//Load dictionaries from files and ask user for input
 	// (or read the input file based on the definition of MANUAL_INPUT)
-	int count = 0;
 	vector<string> inputQueries;
-	
+	tweetsCount = 0;
 
 	cout <<"=======================================\n";
 	cout<<"Twitter Sentiment Analyzer by Alex Susma\n";
 	cout<<"June 2016\n";
 	cout <<"=======================================\n\n";
 
-	if (!LoadDictionaries() || !GetInput(inputQueries, count)){
+	if (!LoadDictionaries() || !GetInput(inputQueries, tweetsCount)){
 		cout<<"Press any key to end the program";
 		_getch();
 		return 0;
@@ -385,16 +435,19 @@ int main( int argc, char* argv[] )
 
 
 #ifdef MULTITHREADING
+
 		//start search and analyse results in separate threads
-		thread myThreads[MAX_THREADS];
+		vector<thread> myThreads;
+		myThreads.reserve(inputQueries.size());
+
 		for (unsigned int i = 0; i < inputQueries.size();++i){
-			myThreads[i] = thread(RunSearchAndAnalysis, inputQueries[i],to_string(count));
+			myThreads.push_back(thread(RunSearchAndAnalysis, inputQueries[i],to_string(tweetsCount)));
 		}
 
-
+		
 		//wait for all threads to finish
-		for (unsigned int i = 0; i < inputQueries.size();++i){
-			myThreads[i].join();
+		for (auto &it : myThreads){
+			it.join();
 		}
 
 		double diff = (clock() - start) / (double)CLOCKS_PER_SEC;
@@ -406,14 +459,16 @@ int main( int argc, char* argv[] )
 		//sequential execution 1 thread
 		start = clock();
 		for (unsigned int i = 0; i < inputQueries.size();++i){
-			RunSearchAndAnalysis(inputQueries[i],to_string(count));
+			RunSearchAndAnalysis(inputQueries[i],to_string(tweetsCount));
 		}
 
-		diff = (clock() - start) / (double)CLOCKS_PER_SEC;
+		double diff = (clock() - start) / (double)CLOCKS_PER_SEC;
 		cout<<"\nTotal time 1 thread: "<<diff<<"\n\n";
 
 #endif
 		OutputResults();
+
+		cout << "\nNext analysis in "<<EXECUTION_PERIOD/1000<<" seconds";
 		Sleep(EXECUTION_PERIOD);	
 }
 
