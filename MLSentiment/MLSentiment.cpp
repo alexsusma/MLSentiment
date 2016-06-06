@@ -13,7 +13,7 @@
 #define EXECUTION_PERIOD	10000
 
 //define this flag if you wish to run multihtreaded
-//#define MULTITHREADING
+#define MULTITHREADING
 
 //define this flag if you wish to output a raw list of tweets analyzed
 #define OUTPUT_TWEETS
@@ -335,7 +335,7 @@ void OutputResults()
 	myfile.open (fileName.c_str());
 
 	cout<<"Company\t\t\tPos\tNeut\tNeg\tSentiment\tChange\n";
-	cout<<"___________________________________________\n\n";
+	cout<<"____________________________________________________________________________\n\n";
 	out<<"Company,Positive,Neutral,Negative\n";
 	//output to screen
 	for (auto it : companyResultsMap){
@@ -357,11 +357,6 @@ void OutputResults()
 			cout<<tabs<<"Yes";
 
 		cout<<"\n";
-
-
-
-
-
 
 		out<<it.first.c_str()<< ","<<company.positive.count<<","<<company.neutral.count<<","<<company.negative.count<<"\n";
 
